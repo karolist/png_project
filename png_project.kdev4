@@ -1,0 +1,4 @@
+[Project]
+Name=png_project
+Manager=KDevCustomMakeManager
+VersionControl=kdevgit
