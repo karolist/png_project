@@ -2,6 +2,7 @@
 #include <stdlib.h>
 
 #include "png_lib.h"
+#include "display.h"
 
 struct img_params{
 	int height;
@@ -21,29 +22,33 @@ int main(int argc, char **argv) {
 	int height, width, depth;
 	int ret;
 
-	ret = PNG_decode("basn0g08.png", &buff, &height, &width, &depth);
+	ret = PNG_decode("basn0g16.png", &buff, &height, &width, &depth);
 
-	if(ret == 0){
-		printf("decode complete\n");
-		printf("height = %d\nwidth = %d\ndepth = %d\n",
+	if(ret != 0){
+		printf("Decode error = %d\n", ret);
+		return ret;
+	}
+
+	printf("decode complete\n");
+	printf("height = %d\nwidth = %d\ndepth = %d\n",
 			height,
 			width,
 			depth);
-		//print our image:
-		img.height = height;
-		img.bdepth = depth;
-		img.width = width;
 
-		int x_iter, y_iter;
-		for(y_iter = 0; y_iter<height; y_iter++){
-			for(x_iter = 0; x_iter<width; x_iter++){
-				printf("%d ", extract_pixel(buff, img, x_iter, y_iter));
-			}
-			printf("\n");
-		}
-		printf("\n");
-	};
+	//print our image:
+	img.height = height;
+	img.bdepth = depth;
+	img.width = width;
 
+	display_raw(buff, height, width, depth);
+// 		int x_iter, y_iter;
+// 		for(y_iter = 0; y_iter<height; y_iter++){
+// 			for(x_iter = 0; x_iter<width; x_iter++){
+// 				printf("%d ", extract_pixel(buff, img, x_iter, y_iter));
+// 			}
+// 			printf("\n");
+// 		}
+// 		printf("\n");
 
     return 0;
 }
