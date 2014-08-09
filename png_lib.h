@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <zlib.h> //for now use zlib's implementation of inflate
 
 //define chunks:
 #define IHDR 0x49484452
