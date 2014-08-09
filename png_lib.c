@@ -169,7 +169,7 @@ int PNG_decode(char* file, void** output, int *height, int* length, int *depth)
 	int size = ((*height) * (*length) * (*depth))/8;
 // 	size = size > buff_l ? buff_l : size;
 
-	printf("good, size = %ld, =%ld, =%ld\n", size, buff_l, *depth);
+	printf("good, size = %d, =%lu, =%d\n", size, buff_l, *depth);
 	*output = realloc(*output, size );
 	memcpy(*output, rec_buff, size);
 
