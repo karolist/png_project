@@ -36,6 +36,7 @@ void data_invert(void *in, void *out, int len);
 int chunk_parser(uint32_t type, void *data, int len);
 int inflate_str(void *data, size_t i_len, void **output, size_t *o_len);
 int data_writer(void *output, size_t o_len);
+int reconstruct_str(void *in_buff, void *out_buff, int len);
 
 //***********************exported functions************************************
 int PNG_decode(char* file, void** output, int *height, int* length, int *depth)
@@ -141,13 +142,34 @@ int PNG_decode(char* file, void** output, int *height, int* length, int *depth)
 					  &buff_l);
 
 	printf("uncompressed with %d, len=%ld\n", ret, buff_l);
-		for(i=0; i<buff_l; i++)
+	for(i=0; i<buff_l; i++)
 		printf("%x ", *(uint8_t *)(buff+i) );
 	printf("\n");
 
 	//reverse png filters
 
+	//first allocate buffer for reconstructed signal:
+	void *rec_buff;
+	rec_buff = malloc(buff_l);
+
+	ret = reconstruct_str(buff, rec_buff, buff_l);
+
+	printf("reconstructed with %d\n", ret);
+	for(i=0; i<buff_l; i++)
+		printf("%x ", *(uint8_t *)(rec_buff+i) );
+	printf("\n");
+
 	free(buff);
+
+
+	//fill output data:
+	*height = png_data.im_info.height;
+	*length = png_data.im_info.width;
+	*depth = png_data.im_info.bdepth; //TODO
+
+	int size = ((*height) * (*length) * (*depth))/8;
+	*output = realloc(*output, size );
+	memcpy(*output, rec_buff, size);
 
     return 0;
 }
@@ -328,5 +350,62 @@ int data_writer(void *output, size_t o_len)
 	fwrite(output, 1, o_len, f);
 
 	fclose(f);
+	return 0;
+}
+
+int reconstruct_str(void *in_buff, void *out_buff, int len)
+{
+	//our data is structured in data lines.
+	int i;
+	uint32_t width = png_data.im_info.width;
+	uint32_t *height = &png_data.im_info.height;
+	uint8_t *method = in_buff;
+
+	//clear output buffer
+	memset(out_buff, 0, len);
+
+	//now how many bits are in a sample:
+	if(png_data.im_info.bdepth == 1 && png_data.im_info.color_t == 0)
+		width >>= 3;
+
+	//move pointer to skip method byte
+	in_buff++;
+	printf("meth=%d\n", *method);
+	//move accross each line
+	for(i=0; i<*height; i++){
+
+		//first byte shows us what filtering method was used:
+		switch(*method){
+			case(0)://none
+				//data is unmodified, we can copy whole line
+				memcpy(out_buff, in_buff, width);
+				break;
+
+			case(1)://sub
+				printf("TODO sub\n");
+				break;
+
+			case(2)://up
+				printf("TODO up\n");
+				break;
+
+			case(3)://average
+				printf("TODO avg\n");
+				break;
+
+			case(4)://paeth
+				printf("TODO pae\n");
+				break;
+
+			default:
+				printf("Invalid data, %d\n", *method);
+				return 0;
+		};
+		//move our buffer pointers accordingly
+		in_buff += width+1;
+		out_buff +=width;
+		method += width+1;
+	}
+
 	return 0;
 }
