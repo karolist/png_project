@@ -161,13 +161,15 @@ int PNG_decode(char* file, void** output, int *height, int* length, int *depth)
 
 	free(buff);
 
-
 	//fill output data:
 	*height = png_data.im_info.height;
 	*length = png_data.im_info.width;
 	*depth = png_data.im_info.bdepth; //TODO
 
 	int size = ((*height) * (*length) * (*depth))/8;
+// 	size = size > buff_l ? buff_l : size;
+
+	printf("good, size = %ld, =%ld, =%ld\n", size, buff_l, *depth);
 	*output = realloc(*output, size );
 	memcpy(*output, rec_buff, size);
 
@@ -359,14 +361,26 @@ int reconstruct_str(void *in_buff, void *out_buff, int len)
 	int i;
 	uint32_t width = png_data.im_info.width;
 	uint32_t *height = &png_data.im_info.height;
-	uint8_t *method = in_buff;
+	uint8_t *bdepth = &png_data.im_info.bdepth; //how many bits are in a pixel;
 
+	uint8_t *method = in_buff;
+	uint32_t line_size;
 	//clear output buffer
 	memset(out_buff, 0, len);
 
 	//now how many bits are in a sample:
-	if(png_data.im_info.bdepth == 1 && png_data.im_info.color_t == 0)
-		width >>= 3;
+	if(png_data.im_info.color_t == 0){
+		if(*bdepth == 16) //special case for longer bdepth
+			line_size = 2*width;
+		else
+			line_size = (*bdepth * width)/8;
+	}else{
+		printf("TODO color types\n");
+		return -1;
+	}
+	printf("dep= %d\nlen=%d", *bdepth, line_size);
+// 	if(png_data.im_info.bdepth == 1 && png_data.im_info.color_t == 0)
+// 		width >>= 3;
 
 	//move pointer to skip method byte
 	in_buff++;
@@ -378,7 +392,7 @@ int reconstruct_str(void *in_buff, void *out_buff, int len)
 		switch(*method){
 			case(0)://none
 				//data is unmodified, we can copy whole line
-				memcpy(out_buff, in_buff, width);
+				memcpy(out_buff, in_buff, line_size);
 				break;
 
 			case(1)://sub
@@ -402,9 +416,9 @@ int reconstruct_str(void *in_buff, void *out_buff, int len)
 				return 0;
 		};
 		//move our buffer pointers accordingly
-		in_buff += width+1;
-		out_buff +=width;
-		method += width+1;
+		in_buff +=line_size+1;
+		out_buff +=line_size;
+		method += line_size+1;
 	}
 
 	return 0;
