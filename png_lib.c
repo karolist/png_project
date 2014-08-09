@@ -38,6 +38,13 @@ int inflate_str(void *data, size_t i_len, void **output, size_t *o_len);
 int data_writer(void *output, size_t o_len);
 int reconstruct_str(void *in_buff, void *out_buff, int len);
 
+//filters
+int sub_filter(void *out, void *in, int line);
+int up_filter(void *out, void *in, int line_len, int line_no);
+int avg_filter(void *out, void *in, int line);
+int paeth_filter(void *out, void *in, int line_len, int line_no);
+
+int paeth_predictor(int a, int b, int c);
 //***********************exported functions************************************
 int PNG_decode(char* file, void** output, int *height, int* length, int *depth)
 {
@@ -142,22 +149,22 @@ int PNG_decode(char* file, void** output, int *height, int* length, int *depth)
 					  &buff_l);
 
 	printf("uncompressed with %d, len=%ld\n", ret, buff_l);
-	for(i=0; i<buff_l; i++)
-		printf("%x ", *(uint8_t *)(buff+i) );
-	printf("\n");
+// 	for(i=0; i<buff_l; i++)
+// 		printf("%x ", *(uint8_t *)(buff+i) );
+// 	printf("\n");
 
 	//reverse png filters
 
 	//first allocate buffer for reconstructed signal:
 	void *rec_buff;
 	rec_buff = malloc(buff_l);
-
+//
 	ret = reconstruct_str(buff, rec_buff, buff_l);
 
 	printf("reconstructed with %d\n", ret);
-	for(i=0; i<buff_l; i++)
-		printf("%x ", *(uint8_t *)(rec_buff+i) );
-	printf("\n");
+// 	for(i=0; i<buff_l; i++)
+// 		printf("%x ", *(uint8_t *)(rec_buff+i) );
+// 	printf("\n");
 
 	free(buff);
 
@@ -168,7 +175,6 @@ int PNG_decode(char* file, void** output, int *height, int* length, int *depth)
 
 	int size = ((*height) * (*length) * (*depth))/8;
 // 	size = size > buff_l ? buff_l : size;
-
 	printf("good, size = %d, =%lu, =%d\n", size, buff_l, *depth);
 	*output = realloc(*output, size );
 	memcpy(*output, rec_buff, size);
@@ -378,7 +384,7 @@ int reconstruct_str(void *in_buff, void *out_buff, int len)
 		printf("TODO color types\n");
 		return -1;
 	}
-	printf("dep= %d\nlen=%d", *bdepth, line_size);
+	printf("dep= %d\nlen=%d\n", *bdepth, line_size);
 // 	if(png_data.im_info.bdepth == 1 && png_data.im_info.color_t == 0)
 // 		width >>= 3;
 
@@ -396,11 +402,15 @@ int reconstruct_str(void *in_buff, void *out_buff, int len)
 				break;
 
 			case(1)://sub
-				printf("TODO sub\n");
+				sub_filter(out_buff, in_buff, line_size); //TODO move line_size
+// to function
+				//sub = value + sub-1
+				//sub-1 means byte before if b_depth < 8
+				//or pixel before, when b_depth >= 8
 				break;
 
 			case(2)://up
-				printf("TODO up\n");
+				up_filter(out_buff, in_buff, line_size, i);
 				break;
 
 			case(3)://average
@@ -408,7 +418,7 @@ int reconstruct_str(void *in_buff, void *out_buff, int len)
 				break;
 
 			case(4)://paeth
-				printf("TODO pae\n");
+				paeth_filter(out_buff, in_buff, line_size, i);
 				break;
 
 			default:
@@ -422,4 +432,141 @@ int reconstruct_str(void *in_buff, void *out_buff, int len)
 	}
 
 	return 0;
+}
+
+int sub_filter(void *out, void *in, int line_len){
+	//cast for our convenience:
+	uint8_t *last_b = out;
+	uint8_t *out_b = out;
+	uint8_t *in_b = in;
+
+	uint8_t step_size = png_data.im_info.bdepth > 16? 2 : 1;
+	uint32_t buffr;
+
+	//first pixel hasn't any diff
+	memcpy(out_b, in_b, step_size);
+	out_b += step_size;
+	in_b += step_size;
+
+	int i;
+	//now copy each value, also skip first one
+	for(i=1; i<line_len;){
+		if(step_size>1){
+			buffr = (*(uint16_t *)in_b + *(uint16_t *)last_b);
+			buffr %= 0xFFFF;
+			*(uint16_t *)out_b = buffr;
+		}else{
+			buffr = (*in_b + *last_b);
+			buffr %= 0xFF;
+			*out_b = buffr;
+		}
+			out_b += step_size;
+			in_b += step_size;
+			last_b += step_size;
+			i += step_size;
+	}
+	return 0;
+};
+
+int up_filter(void *out, void *in, int line_len, int line_no)
+{
+	//cast for our convenience:
+	uint8_t *out_b = out;
+	uint8_t *in_b = in;
+
+	uint8_t up = 0;
+	uint16_t buffr;
+
+
+	int i;
+	//now copy each value, also skip first one
+	for(i=1; i<line_len;i++){
+		if(line_no != 0){
+			up = *(uint8_t *)(out - line_len);
+		};
+		buffr = (*in_b + up);
+		*out_b = buffr & 0xFF;
+		out_b ++;
+		in_b ++;
+	}
+
+	return 0;
+};
+
+int avg_filter(void *out, void *in, int line){
+	return 0;
+};
+
+int paeth_filter(void *out, void *in, int line_len, int line_no){
+// 	works as:
+// 	out(x) = in(x) + predictor( out(x-1), out(y-1), out(y-1,x-1))
+
+	//cast for our convenience:
+	uint8_t *last_b = out;
+	uint8_t *out_b = out;
+	uint8_t *in_b = in;
+
+	uint8_t up, left, upleft; //pixel values
+
+	uint8_t step_size = png_data.im_info.bdepth > 16? 2 : 1;
+	uint32_t buffr;
+
+	int i;
+
+	for(i=0; i<line_len;){
+
+		//update our predictor values:
+
+		//we won't have any parameters for predictor if we're
+		if(i==0 && line_no ==0){
+		//at leftmost pixel:
+			left = 0;
+			upleft = 0;
+			up = 0;
+		}else if(i==0){
+		//if we're leftmost, but not on the first line
+			left =0;
+			upleft = 0;
+			up = *(uint8_t *)(out - line_len);
+		}else if(line_no==0){
+		//if we're on the first line, but not leftmost
+			left = *last_b;
+			upleft=0;
+			up=0;
+		//normal case
+		}else{
+			left = *last_b;
+			upleft = *(uint8_t *)(out - line_len -step_size);
+			up = *(uint8_t *)(out - line_len);
+		};
+
+		//get predictor
+		buffr = paeth_predictor(left, up, upleft);
+		//add current value
+		buffr += *in_b;
+		//truncate it just in case:
+		*out_b = buffr & 0xFF;
+
+		//move our data pointers:
+		last_b ++;
+		out_b ++;
+		in_b ++;
+		i++;
+	}
+
+	return 0;
+};
+
+int paeth_predictor(int a, int b, int c)
+{
+	int p = a + b - c;
+	int pa = abs(p-a);
+	int pb = abs(p-b);
+	int pc = abs(p-c);
+
+	if(pa <= pb && pa <= pc)
+		return a;
+	if(pb <= pc)
+		return b;
+	return c;
 }
