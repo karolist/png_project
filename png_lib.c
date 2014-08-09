@@ -120,9 +120,7 @@ int PNG_decode(char* file, void** output, int *height, int* length, int *depth)
         free(buff);
 
     //check what result we ended with:
-    printf("read succ, i_data_l = %ld, %p\n",
-		   png_data.i_data_l,
-		   png_data.i_data);
+    printf("read succ, i_data_l = %ld\n", png_data.i_data_l);
 
 	//TODO remove this
 	printf("red data = \n");
@@ -217,6 +215,7 @@ int chunk_parser(uint32_t type, void* data, int len)
     //we can safely cast it
 
     int ret;
+	char type_str[5];
 
     switch(type) {
     case(IHDR):
@@ -229,7 +228,11 @@ int chunk_parser(uint32_t type, void* data, int len)
 		ret = PNG_IEND(data, len);
         break;
     default:
-        printf("unknown type = %x\n", type);
+		//convert to string:
+		memcpy(type_str, (void *)&type, 4);
+		data_invert(type_str, type_str, 4);
+		type_str[4] = 0;
+        printf("unknown type '%s'\n", type_str);
         break;
     }
 
@@ -255,7 +258,7 @@ int PNG_IHDR(void* data, int len)
     if(!hdr->width || !hdr->height)
         return -1; //TODO
 
-    printf("w=%x, h=%x, bdepth=%x, col=%x, compr=%x, fil=%x, interl=%x\n",
+    printf("w=%d, h=%d, bdepth=%x, col=%x, compr=%x, fil=%x, interl=%x\n",
            hdr->width,
            hdr->height,
            hdr->bdepth,
@@ -280,7 +283,7 @@ int PNG_IDAT(void* data, int len)
 	//check arguments
 	if(!data || len==0)
         return -1; //TODO
-	printf("enlarge by %d\n", len);
+	printf("IDAT len = %d\n", len);
 	//enlarge our input data pool
 	png_data.i_data = realloc(png_data.i_data, png_data.i_data_l + len);
 	if(!png_data.i_data)
