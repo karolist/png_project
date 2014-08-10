@@ -12,8 +12,10 @@
 
 void putpixel(SDL_Surface *surface, int x, int y, Uint32 pixel);
 
-int display_raw(void* data, int heigth, int width, int bsize)
+int display_raw(void* data, int heigth, int width, int bsize, color_t
+color)
 {
+	printf("bsize = %d, col=%d\n", bsize, color);
 	if(SDL_Init(SDL_INIT_VIDEO) != 0){
 		printf("SDL fail\n");
 		return -1;
@@ -21,8 +23,8 @@ int display_raw(void* data, int heigth, int width, int bsize)
 
 	SDL_Surface *disp;
 
-	disp = SDL_SetVideoMode(width,
-							heigth,
+	disp = SDL_SetVideoMode(20*width,
+							20*heigth,
 						 32,
 						 (SDL_HWSURFACE|SDL_DOUBLEBUF));
 
@@ -42,17 +44,29 @@ int display_raw(void* data, int heigth, int width, int bsize)
 	if(!im)
 		printf("create fail\n");
 
-	int i,j;
-	uint32_t px;
-	for(i=0; i<width; i++){
-		for(j=0; j<heigth; j++){
-			memset(&px, *(uint8_t *)data, 3);
-			putpixel(im, width - i, j, px);
-			data++;
+	int x,y;
+	uint8_t px[4];
+	void *data_start = data;
+	for(y=0; y<1/*heigth*/; y++){
+		for(x=0; x<width; x++){
+			if(color == 1){
+				memset(&px[1], *((uint8_t *)data), 4);
+				data += bsize >> 3; //TODO this
+			}
+			else{
+				memcpy(&px, (uint8_t *)data, 3);
+				data += (bsize*color) >> 3;
+			}
+// 			px = *(uint16_t *)data >> 8;
+			printf("px = %x, step=%d, off=%d\n", *(uint32_t *)px, (bsize*color)
+>> 3, data - data_start);
+			putpixel(im, x, y, *(uint32_t *)px);
 		}
 	};
 
-	SDL_BlitSurface(im, NULL, disp, NULL);
+// 	SDL_BlitSurface(im, NULL, disp, NULL);
+// 	disp = SDL_ScaleSurface(im, 10*width, 10*heigth);
+	SDL_SoftStretch(im, NULL, disp, NULL);
 
 	SDL_Flip(disp);
 

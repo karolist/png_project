@@ -13,4 +13,11 @@
 //uses sdl, TODO use something more sane
 #include <SDL/SDL.h>
 
-int display_raw(void *data, int heigth, int width, int bsize);
+typedef enum color_t{
+	GREYSCALE,
+	RGB,
+	GREYSCALE_ALPHA,
+	RGB_ALPHA,
+}color_t;
+
+int display_raw(void *data, int heigth, int width, int bsize, color_t color);
