@@ -37,16 +37,18 @@ int chunk_parser(uint32_t type, void *data, int len);
 int inflate_str(void *data, size_t i_len, void **output, size_t *o_len);
 int data_writer(void *output, size_t o_len);
 int reconstruct_str(void *in_buff, void *out_buff, int len);
+int getcolor_ch(struct png_data_t *im);
 
 //filters
-int sub_filter(void *out, void *in, int line);
+int sub_filter(void *out, void *in, int line, int color_ch);
 int up_filter(void *out, void *in, int line_len, int line_no);
 int avg_filter(void *out, void *in, int line);
 int paeth_filter(void *out, void *in, int line_len, int line_no);
 
 int paeth_predictor(int a, int b, int c);
 //***********************exported functions************************************
-int PNG_decode(char* file, void** output, int *height, int* length, int *depth)
+int PNG_decode(char* file, void** output, int *height, int* length, int *depth,
+int *color_ch)
 {
 	//clear memory just in case
 	memset(&png_data, 0, sizeof(png_data_t));
@@ -162,9 +164,9 @@ int PNG_decode(char* file, void** output, int *height, int* length, int *depth)
 	ret = reconstruct_str(buff, rec_buff, buff_l);
 
 	printf("reconstructed with %d\n", ret);
-// 	for(i=0; i<buff_l; i++)
-// 		printf("%x ", *(uint8_t *)(rec_buff+i) );
-// 	printf("\n");
+	for(i=0; i<buff_l; i++)
+		printf("%x ", *(uint8_t *)(rec_buff+i) );
+	printf("\n");
 
 	free(buff);
 
@@ -173,7 +175,9 @@ int PNG_decode(char* file, void** output, int *height, int* length, int *depth)
 	*length = png_data.im_info.width;
 	*depth = png_data.im_info.bdepth; //TODO
 
-	int size = ((*height) * (*length) * (*depth))/8;
+	*color_ch = getcolor_ch(&png_data);
+
+	int size = ((*height) * (*length) * (*depth) * (*color_ch))/8;
 // 	size = size > buff_l ? buff_l : size;
 	printf("good, size = %d, =%lu, =%d\n", size, buff_l, *depth);
 	*output = realloc(*output, size );
@@ -375,15 +379,43 @@ int reconstruct_str(void *in_buff, void *out_buff, int len)
 	memset(out_buff, 0, len);
 
 	//now how many bits are in a sample:
-	if(png_data.im_info.color_t == 0){
+	switch(png_data.im_info.color_t){
+		case(0): //greyscal image
 		if(*bdepth == 16) //special case for longer bdepth
 			line_size = 2*width;
 		else
 			line_size = (*bdepth * width)/8;
-	}else{
-		printf("TODO color types\n");
-		return -1;
+		break;
+
+		case(2): //truecolor image
+			//on true color, only bdepth 16 and 8 are suported
+			if(*bdepth != 16 && *bdepth != 8){
+				printf("Wrong bdepth, %d\n", *bdepth);
+				return -1;
+			};
+			//line size in samples is width in px * channels * B per sample
+			line_size = width * ((*bdepth)>>3);
+			printf("line_size = %d\n", line_size);
+			break;
+
+		case(3): //indexed color
+			printf("TODO indexed color\n");
+			return -1;
+			break;
+		case(4):
+			printf("TODO greyscale+alpha\n");
+			return -1;
+			break;
+		case(6):
+			printf("TODO truecolor with alpha\n");
+			return -1;
+			break;
+		default:
+			printf("unsuported color type\n");
+			return -1;
+			break;
 	}
+
 	printf("dep= %d\nlen=%d\n", *bdepth, line_size);
 // 	if(png_data.im_info.bdepth == 1 && png_data.im_info.color_t == 0)
 // 		width >>= 3;
@@ -392,8 +424,13 @@ int reconstruct_str(void *in_buff, void *out_buff, int len)
 	in_buff++;
 	printf("meth=%d\n", *method);
 	//move accross each line
-	for(i=0; i<*height; i++){
+	int color_ch = getcolor_ch(&png_data);
+	if(color_ch <= 0){
+		printf("getcolor_ch fail\n");
+		return -1;
+	}
 
+	for(i=0; i<*height; i++){
 		//first byte shows us what filtering method was used:
 		switch(*method){
 			case(0)://none
@@ -402,8 +439,8 @@ int reconstruct_str(void *in_buff, void *out_buff, int len)
 				break;
 
 			case(1)://sub
-				sub_filter(out_buff, in_buff, line_size); //TODO move line_size
-// to function
+				sub_filter(out_buff, in_buff, line_size, color_ch);
+//TODO move				//line_size // to function
 				//sub = value + sub-1
 				//sub-1 means byte before if b_depth < 8
 				//or pixel before, when b_depth >= 8
@@ -434,37 +471,50 @@ int reconstruct_str(void *in_buff, void *out_buff, int len)
 	return 0;
 }
 
-int sub_filter(void *out, void *in, int line_len){
+int sub_filter(void *out, void *in, int line_len, int color_ch){
 	//cast for our convenience:
 	uint8_t *last_b = out;
 	uint8_t *out_b = out;
 	uint8_t *in_b = in;
 
 	uint8_t step_size = png_data.im_info.bdepth > 16? 2 : 1;
+	//step_size *= color_ch;
 	uint32_t buffr;
 
 	//first pixel hasn't any diff
-	memcpy(out_b, in_b, step_size);
-	out_b += step_size;
-	in_b += step_size;
+	memcpy(out_b, in_b, step_size*color_ch);
+	out_b += step_size*color_ch;
+	in_b += step_size*color_ch;
 
 	int i;
 	//now copy each value, also skip first one
+	printf("step size = %d, line_len=%d\n", step_size, line_len);
+
+	uint8_t sub_p;
 	for(i=1; i<line_len;){
 		if(step_size>1){
-			buffr = (*(uint16_t *)in_b + *(uint16_t *)last_b);
-			buffr %= 0xFFFF;
-			*(uint16_t *)out_b = buffr;
+			for(sub_p=0; sub_p < color_ch; sub_p++){
+				buffr = (*(uint16_t *)in_b+sub_p + *(uint16_t *)last_b + sub_p);
+				buffr %= 0xFFFF;
+				*((uint16_t *)out_b+sub_p) = buffr; //TEST this
+			}
 		}else{
-			buffr = (*in_b + *last_b);
-			buffr %= 0xFF;
-			*out_b = buffr;
+			for(sub_p = 0; sub_p < color_ch; sub_p++){
+				buffr = (*(in_b+sub_p) + *(last_b+sub_p));
+				buffr &= 0xFF;
+				*(out_b+sub_p) = buffr;
+			}
+			data_invert(out_b, out_b, color_ch);
 		}
-			out_b += step_size;
-			in_b += step_size;
-			last_b += step_size;
-			i += step_size;
+		out_b += step_size * color_ch;
+		in_b += step_size * color_ch;
+		last_b += step_size * color_ch;
+		i += step_size;
 	}
+
+
+
+
 	return 0;
 };
 
@@ -482,7 +532,7 @@ int up_filter(void *out, void *in, int line_len, int line_no)
 	//now copy each value, also skip first one
 	for(i=1; i<line_len;i++){
 		if(line_no != 0){
-			up = *(uint8_t *)(out - line_len);
+			up = *(uint8_t *)(out_b - line_len);
 		};
 		buffr = (*in_b + up);
 		*out_b = buffr & 0xFF;
@@ -494,13 +544,13 @@ int up_filter(void *out, void *in, int line_len, int line_no)
 };
 
 int avg_filter(void *out, void *in, int line){
+	printf("AVG TODO\n");
 	return 0;
 };
 
 int paeth_filter(void *out, void *in, int line_len, int line_no){
 // 	works as:
 // 	out(x) = in(x) + predictor( out(x-1), out(y-1), out(y-1,x-1))
-
 	//cast for our convenience:
 	uint8_t *last_b = out;
 	uint8_t *out_b = out;
@@ -570,3 +620,22 @@ int paeth_predictor(int a, int b, int c)
 		return b;
 	return c;
 }
+
+int getcolor_ch(struct png_data_t *im)
+{
+		//TODO clean this
+	switch(png_data.im_info.color_t){
+		case(0)://greyscale
+			return 1;
+		case(2):
+		case(3):
+			return 3;
+		case(4):
+			return 2;
+		case(6):
+			return 4;
+		default:
+			printf("Invalid color chanel number\n");
+			return -1;
+	}
+};

@@ -40,7 +40,8 @@ struct __attribute__((packed, aligned(1))) ihdr_t{
  * *output - uncompressed picture memory location, which is
  * heigth * length * depth size
  */
-int PNG_decode(char *file, void **output, int *height, int *length, int *depth);
+int PNG_decode(char *file, void **output, int *height, int *length, int
+*depth, int *color_ch);
 
 /*
  * prints info about file
