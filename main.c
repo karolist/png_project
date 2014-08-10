@@ -8,6 +8,7 @@ struct img_params{
 	int height;
 	int width;
 	int bdepth;
+	int color_ch;
 };
 
 struct img_params img;
@@ -19,10 +20,10 @@ int extract_pixel(void *data, struct img_params, int x_coord, int y_coord);
 int main(int argc, char **argv) {
 
 	void *buff = NULL;
-	int height, width, depth;
+	int height, width, depth, colors;
 	int ret;
 
-	ret = PNG_decode("basn0g16.png", &buff, &height, &width, &depth);
+	ret = PNG_decode("basn2c08.png", &buff, &height, &width, &depth, &colors);
 
 	if(ret != 0){
 		printf("Decode error = %d\n", ret);
@@ -39,16 +40,20 @@ int main(int argc, char **argv) {
 	img.height = height;
 	img.bdepth = depth;
 	img.width = width;
+	img.color_ch = colors;
 
-	display_raw(buff, height, width, depth);
-// 		int x_iter, y_iter;
+
+	int x_iter, y_iter=0;
 // 		for(y_iter = 0; y_iter<height; y_iter++){
-// 			for(x_iter = 0; x_iter<width; x_iter++){
-// 				printf("%d ", extract_pixel(buff, img, x_iter, y_iter));
-// 			}
-// 			printf("\n");
+ 			for(x_iter = 0; x_iter<width; x_iter++){
+ 				printf("%x ", extract_pixel(buff, img, x_iter, y_iter));
+ 			}
+ 			printf("\n");
 // 		}
 // 		printf("\n");
+
+	display_raw(buff, height, width, depth, colors);
+
 
     return 0;
 }
@@ -61,9 +66,9 @@ int extract_pixel(void* data, struct img_params img, int x_coord, int y_coord)
 	uint8_t *start_b;
 	uint8_t bit_p;
 	//by png specs, we're allowed 1,2,4,8,16 bdepths.
-	off_per_line = img.width * img.bdepth / 8;
+	off_per_line = img.color_ch* img.width * img.bdepth / 8;
 
-	off = x_coord*img.bdepth/8 + y_coord * off_per_line;
+	off = x_coord * img.color_ch * img.bdepth/8 + y_coord * off_per_line;
 	start_b = ((uint8_t *)data)+off;
 
 	switch(img.bdepth){
