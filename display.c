@@ -47,7 +47,7 @@ color)
 	int x,y;
 	uint8_t px[4];
 	void *data_start = data;
-	for(y=0; y<1/*heigth*/; y++){
+	for(y=0; y<heigth; y++){
 		for(x=0; x<width; x++){
 			if(color == 1){
 				memset(&px[1], *((uint8_t *)data), 4);
@@ -57,22 +57,18 @@ color)
 				memcpy(&px, (uint8_t *)data, 3);
 				data += (bsize*color) >> 3;
 			}
-// 			px = *(uint16_t *)data >> 8;
-			printf("px = %x, step=%d, off=%d\n", *(uint32_t *)px, (bsize*color)
->> 3, data - data_start);
+			printf("px = %x, step=%d, off=%d\n",
+				   *(uint32_t *)px,
+				   (bsize*color)>> 3,
+				   data - data_start);
+
 			putpixel(im, x, y, *(uint32_t *)px);
 		}
 	};
 
-// 	SDL_BlitSurface(im, NULL, disp, NULL);
-// 	disp = SDL_ScaleSurface(im, 10*width, 10*heigth);
 	SDL_SoftStretch(im, NULL, disp, NULL);
 
 	SDL_Flip(disp);
-
-// 	if(!im){
-// 		printf("load im fail\n");
-// 	}
 
 	SDL_Event event;
 	while(1){
