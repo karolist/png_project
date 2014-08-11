@@ -46,7 +46,7 @@ color)
 
 	int x,y;
 	uint8_t px[4];
-	void *data_start = data;
+
 	for(y=0; y<heigth; y++){
 		for(x=0; x<width; x++){
 			if(color == 1){
@@ -57,10 +57,6 @@ color)
 				memcpy(&px, (uint8_t *)data, 3);
 				data += (bsize*color) >> 3;
 			}
-			printf("px = %x, step=%d, off=%d\n",
-				   *(uint32_t *)px,
-				   (bsize*color)>> 3,
-				   data - data_start);
 
 			putpixel(im, x, y, *(uint32_t *)px);
 		}

@@ -92,9 +92,6 @@ int *color_ch)
         data_invert(buff, &ch_len, 4);
         data_invert(buff+4, &ch_typ, 4);
 
-        //sanity check these values:
-//         printf("len = %x, type = %x\n", ch_len, ch_typ);
-
         //try to allocate chunk sized memory + ch_len +ch_typ for CRC
         //calculation
         buff = realloc(buff, ch_len + PNG_CHUNK_HEADER_LEN);
@@ -129,11 +126,6 @@ int *color_ch)
     if(buff)
         free(buff);
 
-    //check what result we ended with:
-    printf("read succ, i_data_l = %ld\n", png_data.i_data_l);
-
-	//TODO remove this
-	printf("red data = \n");
 	int i;
 	for(i=0; i<png_data.i_data_l; i++)
 		printf("%x ", *(uint8_t *)(png_data.i_data+i) );
@@ -150,11 +142,6 @@ int *color_ch)
 					  &buff,
 					  &buff_l);
 
-	printf("uncompressed with %d, len=%ld\n", ret, buff_l);
-// 	for(i=0; i<buff_l; i++)
-// 		printf("%x ", *(uint8_t *)(buff+i) );
-// 	printf("\n");
-
 	//reverse png filters
 
 	//first allocate buffer for reconstructed signal:
@@ -162,11 +149,6 @@ int *color_ch)
 	rec_buff = malloc(buff_l);
 //
 	ret = reconstruct_str(buff, rec_buff, buff_l);
-
-	printf("reconstructed with %d\n", ret);
-	for(i=0; i<buff_l; i++)
-		printf("%x ", *(uint8_t *)(rec_buff+i) );
-	printf("\n");
 
 	free(buff);
 
@@ -178,8 +160,6 @@ int *color_ch)
 	*color_ch = getcolor_ch(&png_data);
 
 	int size = ((*height) * (*length) * (*depth) * (*color_ch))/8;
-// 	size = size > buff_l ? buff_l : size;
-	printf("good, size = %d, =%lu, =%d\n", size, buff_l, *depth);
 	*output = realloc(*output, size );
 	memcpy(*output, rec_buff, size);
 
@@ -210,7 +190,6 @@ int PNG_header(void *data, int len) {
     long unsigned int magic = PNG_MAGIC_NUM;
     int ret = memcmp(data, &magic, len);
     if(ret != 0) {
-        printf("comparying %lx %lx\n", magic, *(long unsigned int *)data);
         return -1; //TODO
     }
 
@@ -292,15 +271,6 @@ int PNG_IHDR(void* data, int len)
     if(!hdr->width || !hdr->height)
         return -1; //TODO
 
-    printf("w=%d, h=%d, bdepth=%x, col=%x, compr=%x, fil=%x, interl=%x\n",
-           hdr->width,
-           hdr->height,
-           hdr->bdepth,
-           hdr->color_t,
-           hdr->compression_t,
-           hdr->filter_m,
-           hdr->interlace_m);
-
     //TODO add more checks as defined in png specs
 
     //if we accepted header, copy it to local buffer
@@ -317,7 +287,7 @@ int PNG_IDAT(void* data, int len)
 	//check arguments
 	if(!data || len==0)
         return -1; //TODO
-	printf("IDAT len = %d\n", len);
+
 	//enlarge our input data pool
 	png_data.i_data = realloc(png_data.i_data, png_data.i_data_l + len);
 	if(!png_data.i_data)
@@ -352,13 +322,6 @@ int data_writer(void *output, size_t o_len)
 	FILE *f;
 	f = fopen("png_o.bmp", "wb+");
 
-	printf("%x %x %x %x\n",
-			*(uint8_t *)output,
-			*(uint8_t *)(output+1),
-			*(uint8_t *)(output+2),
-			*(uint8_t *)(output+3));
-
-	printf("writing output of size %ld\n", o_len);
 	fwrite(output, 1, o_len, f);
 
 	fclose(f);
@@ -416,13 +379,8 @@ int reconstruct_str(void *in_buff, void *out_buff, int len)
 			break;
 	}
 
-	printf("dep= %d\nlen=%d\n", *bdepth, line_size);
-// 	if(png_data.im_info.bdepth == 1 && png_data.im_info.color_t == 0)
-// 		width >>= 3;
-
 	//move pointer to skip method byte
 	in_buff++;
-	printf("meth=%d\n", *method);
 	//move accross each line
 	int color_ch = getcolor_ch(&png_data);
 	if(color_ch <= 0){
